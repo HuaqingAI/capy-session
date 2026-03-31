@@ -10,6 +10,7 @@ Usage:
   capy-cli create DESKTOP_ID TITLE [--model MODEL]
   capy-cli rename SESSION_ID TITLE
   capy-cli delete SESSION_ID [--force]
+  capy-cli send SESSION_ID "message" [--wait] [--timeout 120]
 """
 
 import argparse
@@ -212,6 +213,138 @@ def cmd_delete(args):
     print(f"Deleted session: {args.session_id}")
 
 
+# ─── WebSocket send ──────────────────────────────────────────────────────────
+
+def _extract_text(event: dict) -> tuple[str, bool]:
+    """
+    Try to pull printable text out of a WebSocket event.
+    Returns (text, is_done).  is_done=True signals end-of-stream.
+    """
+    inner = event.get("data", {})
+    if not isinstance(inner, dict):
+        return "", False
+
+    etype = inner.get("type", "")
+
+    # End-of-stream markers
+    if etype in ("message_stop", "end", "done", "complete"):
+        return "", True
+
+    content_obj = inner.get("data", {})
+    if not isinstance(content_obj, dict):
+        return "", False
+
+    # Assistant message (full or delta)
+    if etype in ("message", "message_delta"):
+        content = content_obj.get("content", "")
+        if isinstance(content, str):
+            return content, False
+        if isinstance(content, list):
+            parts = [b.get("text", "") for b in content
+                     if isinstance(b, dict) and b.get("type") == "text"]
+            return "".join(parts), False
+
+    # Streaming text delta
+    if etype == "content_block_delta":
+        delta = content_obj.get("delta", {})
+        if isinstance(delta, dict) and delta.get("type") == "text_delta":
+            return delta.get("text", ""), False
+
+    return "", False
+
+
+def cmd_send(args):
+    config = load_config()
+    require_auth(config)
+
+    try:
+        import websocket as ws_lib
+    except ImportError:
+        print("Error: 'websocket-client' not found. Run: pip install websocket-client")
+        sys.exit(1)
+
+    import time
+    import threading
+    from datetime import datetime, timezone
+
+    token = config.get("token", "")
+    cookie_str = config.get("cookies", "")
+    ts = int(time.time() * 1000)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + f"{ts % 1000:03d}Z"
+
+    payload = json.dumps({
+        "type": "event",
+        "sessionId": args.session_id,
+        "data": {
+            "id": f"temp-{ts}",
+            "parent_id": None,
+            "type": "message",
+            "data": {"role": "user", "content": args.message},
+            "created_at": now,
+            "updated_at": now,
+        },
+    })
+
+    state = {"sent": False, "error": None, "newline_needed": False}
+
+    def on_open(ws):
+        ws.send(payload)
+        state["sent"] = True
+        if not args.wait:
+            ws.close()
+
+    def on_message(ws, raw):
+        if not args.wait:
+            return
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return
+        text, done = _extract_text(data)
+        if text:
+            print(text, end="", flush=True)
+            state["newline_needed"] = not text.endswith("\n")
+        if done:
+            if state["newline_needed"]:
+                print()
+            ws.close()
+
+    def on_error(ws, error):
+        state["error"] = str(error)
+
+    def on_close(ws, *_):
+        if state["newline_needed"]:
+            print()
+
+    ws = ws_lib.WebSocketApp(
+        f"wss://happycapy.ai/ws?token={token}",
+        header={"Origin": "https://happycapy.ai", "Cookie": cookie_str},
+        on_open=on_open,
+        on_message=on_message,
+        on_error=on_error,
+        on_close=on_close,
+    )
+
+    t = threading.Thread(target=ws.run_forever, kwargs={"ping_timeout": 10})
+    t.daemon = True
+    t.start()
+
+    wait_secs = args.timeout if args.wait else 10
+    t.join(timeout=wait_secs)
+    if t.is_alive():
+        ws.close()
+        t.join(timeout=3)
+
+    if state["error"]:
+        print(f"Error: {state['error']}", file=sys.stderr)
+        sys.exit(1)
+    if not state["sent"]:
+        print("Failed to connect or send message.", file=sys.stderr)
+        sys.exit(1)
+    if not args.wait:
+        print(f"Message sent to session {args.session_id}")
+
+
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
 def main():
@@ -256,6 +389,16 @@ def main():
     p.add_argument("session_id", help="Session ID")
     p.add_argument("--force", "-f", action="store_true", help="Skip confirmation prompt")
     p.set_defaults(func=cmd_delete)
+
+    # send
+    p = sub.add_parser("send", help="Send a message to a session via WebSocket")
+    p.add_argument("session_id", help="Session ID")
+    p.add_argument("message", help="Message text to send")
+    p.add_argument("--wait", "-w", action="store_true",
+                   help="Stream and print the AI response (requires websocket-client)")
+    p.add_argument("--timeout", "-t", type=int, default=120,
+                   help="Max seconds to wait when --wait is set (default: 120)")
+    p.set_defaults(func=cmd_send)
 
     args = parser.parse_args()
     try:

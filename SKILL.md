@@ -2,12 +2,13 @@
 name: capy-session
 description: >
   Manage HappyCapy sessions and desktops using the capy-cli tool. Use this skill
-  whenever the user wants to list, create, rename, or delete HappyCapy sessions or
-  desktops — including phrasing like "show my sessions", "create a new session",
-  "list desktops", "rename this session", "delete session", "manage my capy sessions",
+  whenever the user wants to list, create, rename, delete, or send messages to
+  HappyCapy sessions or desktops — including phrasing like "show my sessions",
+  "create a new session", "list desktops", "rename this session", "delete session",
+  "send a message to my session", "kick off a task in session", "manage my capy sessions",
   or "set up capy-cli auth". Also trigger when the user asks about HappyCapy session
-  management, wants to organize their AI workspaces, or mentions session IDs or
-  desktop IDs in a HappyCapy context.
+  management, wants to organize their AI workspaces, mentions session IDs or desktop
+  IDs in a HappyCapy context, or wants to programmatically interact with a session.
 ---
 
 # capy-session — HappyCapy Session Manager
@@ -23,6 +24,7 @@ Before any session operations, ensure `capy-cli` is installed and configured.
 
 ```bash
 pip install requests -q
+pip install websocket-client -q  # needed for the `send` command
 ```
 
 ### Set up the CLI alias (one-time)
@@ -98,6 +100,23 @@ python /home/node/.claude/skills/capy-session/scripts/capy-cli.py delete SESSION
 ```
 
 Without `--force`, the CLI prompts for confirmation. In automated/scripted contexts, use `--force` and confirm with the user beforehand.
+
+### Send a message to a session
+
+```bash
+# Fire-and-forget (confirm delivery, response visible in browser)
+python /home/node/.claude/skills/capy-session/scripts/capy-cli.py send SESSION_ID "Your message here"
+
+# Wait and stream the AI response to stdout
+python /home/node/.claude/skills/capy-session/scripts/capy-cli.py send SESSION_ID "Your message here" --wait
+
+# Adjust response timeout (default 120s)
+python /home/node/.claude/skills/capy-session/scripts/capy-cli.py send SESSION_ID "Your message here" --wait --timeout 60
+```
+
+This connects to the HappyCapy WebSocket (`wss://happycapy.ai/ws?token=<token>`) and delivers the message using the same protocol the browser uses. Requires `websocket-client` (`pip install websocket-client`).
+
+**When to use `--wait`**: Use it if you want to read the AI's reply in the terminal (e.g., for scripted automation or batch processing). Without `--wait`, the message is sent immediately and the user can view the response in the browser as usual.
 
 ## Default Desktop
 
