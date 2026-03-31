@@ -99,6 +99,32 @@ python /home/node/.claude/skills/capy-session/scripts/capy-cli.py delete SESSION
 
 Without `--force`, the CLI prompts for confirmation. In automated/scripted contexts, use `--force` and confirm with the user beforehand.
 
+## Default Desktop
+
+The current desktop ID can be extracted from `pwd`. The workspace path contains the desktop UUID as a segment, for example:
+
+```
+/home/node/a0/workspace/bcd8b15b-de4c-443c-9d83-afc82fa10f39/workspace
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         this segment is the desktop ID
+```
+
+Extract it with:
+```bash
+pwd | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1
+```
+
+### When to use the default desktop
+
+| Situation | Behavior |
+|-----------|----------|
+| User says "当前桌面" / "current desktop" | Extract ID from pwd, use directly, **no confirmation needed** |
+| No desktop specified by user | Extract ID from pwd, **ask user to confirm** before proceeding |
+| User provides an explicit desktop ID | Use that ID directly |
+
+Example confirmation message when defaulting:
+> 我将使用当前桌面（ID: `bcd8b15b-de4c-443c-9d83-afc82fa10f39`），确认继续吗？
+
 ## Workflow Guidelines
 
 ### When the user's intent is clear
@@ -108,9 +134,16 @@ Run the relevant command directly and present the output in a readable way. For 
 ### When the user needs to find a session first
 
 If the user says something like "delete my 'Research' session" but doesn't have the ID:
-1. Run `desktops` to list desktops
-2. Run `sessions DESKTOP_ID` on the relevant desktop
+1. Determine the desktop (default desktop or ask)
+2. Run `sessions DESKTOP_ID` to list sessions
 3. Find the matching session and confirm with the user before acting
+
+### Session index references
+
+Users may refer to sessions by position (e.g., "第6到8个会话", "sessions 6~8"). In this case:
+1. Run `sessions DESKTOP_ID` to get the full list
+2. Pick sessions at positions 6–8 (1-indexed, ordered as returned by the API)
+3. Show the user which sessions those are and confirm before any destructive action
 
 ### Deletion safety
 
@@ -140,3 +173,9 @@ If you get a `404`, the session or desktop ID may be wrong — double-check with
 
 **User**: "Delete all sessions older than last week"
 → List sessions, show the user which ones qualify, ask for confirmation, then delete one by one.
+
+**User**: "帮我清理当前桌面的第6~8个会话"
+→ Extract desktop ID from pwd, run `sessions DESKTOP_ID`, pick sessions at index 6–8, show the user their titles, confirm, then delete each with `--force`.
+
+**User**: "列出会话" (no desktop specified)
+→ Extract desktop ID from pwd, confirm: "我将使用当前桌面（`<ID>`），确认继续吗？", then run `sessions DESKTOP_ID`.
