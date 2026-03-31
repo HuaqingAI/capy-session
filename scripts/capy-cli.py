@@ -290,8 +290,9 @@ def cmd_send(args):
     def on_open(ws):
         ws.send(payload)
         state["sent"] = True
-        if not args.wait:
-            ws.close()
+        # Don't call ws.close() here — closing from within on_open
+        # creates a race with the internal send buffer and sets sock=None
+        # prematurely. For fire-and-forget, the main thread timeout closes it.
 
     def on_message(ws, raw):
         if not args.wait:
