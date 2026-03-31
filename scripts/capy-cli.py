@@ -162,19 +162,18 @@ def cmd_desktops(args):
 def cmd_sessions(args):
     config = load_config()
     require_auth(config)
-    data = api_get(config, f"/sessions/{args.desktop_id}", {"eventsLimit": 0})
-    session = data.get("session", data)
-    sub = session.get("subSessions") or session.get("sessions") or []
+    data = api_get(config, f"/sessions/{args.desktop_id}/children")
+    sessions = data.get("sessions", data) if isinstance(data, dict) else data
 
-    print(f"Desktop: {session.get('title','')}  ({args.desktop_id})\n")
-    if not sub:
-        print("No sub-sessions found.")
+    print(f"Desktop: {args.desktop_id}\n")
+    if not sessions:
+        print("No sessions found.")
         return
-    print(f"{'ID':<38}  {'Title':<35}  {'Model':<22}  {'Updated'}")
-    print("-" * 110)
-    for s in sub:
+    print(f"{'#':<4}  {'ID':<38}  {'Title':<35}  {'Model':<22}  {'Updated'}")
+    print("-" * 116)
+    for i, s in enumerate(sessions, 1):
         updated = s.get("updatedAt", "")[:19].replace("T", " ")
-        print(f"{s['id']:<38}  {s.get('title',''):<35}  {s.get('model',''):<22}  {updated}")
+        print(f"{i:<4}  {s['id']:<38}  {s.get('title',''):<35}  {s.get('model',''):<22}  {updated}")
 
 
 def cmd_create(args):
