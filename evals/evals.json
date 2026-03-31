@@ -1,0 +1,95 @@
+{
+  "skill_name": "capy-session",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to start managing my HappyCapy sessions from the CLI. How do I set it up? I've never used capy-cli before.",
+      "expected_output": "A clear walkthrough: install the requests library, explain how to get the token and cookies from browser DevTools, and show the config command to run. Should feel like a friendly onboarding, not a raw man page.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "mentions-pip-install",
+          "description": "Response mentions installing the requests library via pip",
+          "type": "contains_keyword",
+          "keywords": ["pip install requests"]
+        },
+        {
+          "id": "mentions-devtools",
+          "description": "Response explains how to get credentials from browser DevTools or Network tab",
+          "type": "contains_keyword",
+          "keywords": ["DevTools", "devtools", "Network tab", "network tab", "Developer Tools"]
+        },
+        {
+          "id": "shows-config-command",
+          "description": "Response includes the config --token ... --cookies ... command",
+          "type": "contains_keyword",
+          "keywords": ["config --token", "--cookies"]
+        },
+        {
+          "id": "references-correct-script-path",
+          "description": "Response references the installed skill script path (not the uploads path)",
+          "type": "contains_keyword",
+          "keywords": ["/home/node/.claude/skills/capy-session/scripts/capy-cli.py", "capy-session/scripts"]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "List all my desktops please",
+      "expected_output": "Runs `capy-cli desktops` and presents the output. If auth isn't configured yet, explains what's needed. Should either show the table or handle the auth error gracefully.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "shows-desktops-command",
+          "description": "Response shows the desktops subcommand",
+          "type": "contains_keyword",
+          "keywords": ["desktops"]
+        },
+        {
+          "id": "references-correct-script-path",
+          "description": "Response uses the installed script path, not a generic placeholder",
+          "type": "contains_keyword",
+          "keywords": ["capy-cli.py", "capy-session/scripts"]
+        },
+        {
+          "id": "handles-auth-gracefully",
+          "description": "Response mentions auth configuration or what to do if not configured",
+          "type": "contains_keyword",
+          "keywords": ["config", "token", "auth", "configured"]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a new session called 'Q2 Planning' inside desktop d7a4e2b1-0000-0000-0000-aabbccddeeff and use the haiku model",
+      "expected_output": "Runs `capy-cli create DESKTOP_ID 'Q2 Planning' --model claude-haiku-4-5` and reports back the created session ID, title, and model.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "uses-correct-desktop-id",
+          "description": "Command includes the exact desktop UUID from the prompt",
+          "type": "contains_keyword",
+          "keywords": ["d7a4e2b1-0000-0000-0000-aabbccddeeff"]
+        },
+        {
+          "id": "uses-haiku-model-flag",
+          "description": "Command uses --model claude-haiku-4-5 (not just 'haiku')",
+          "type": "contains_keyword",
+          "keywords": ["--model claude-haiku-4-5"]
+        },
+        {
+          "id": "includes-session-title",
+          "description": "Command includes the session title 'Q2 Planning'",
+          "type": "contains_keyword",
+          "keywords": ["Q2 Planning"]
+        },
+        {
+          "id": "uses-create-subcommand",
+          "description": "Response uses the create subcommand",
+          "type": "contains_keyword",
+          "keywords": ["create"]
+        }
+      ]
+    }
+  ]
+}
